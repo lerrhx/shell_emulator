@@ -35,6 +35,14 @@ def parse_command(user_input):
     args = parts[1:]
     return command, args
 
+def normalize_path(path):
+    if not path.startswith("/"):
+        path = os.path.join(current_dir, path)
+    path = os.path.normpath(path).replace("\\", "/")
+    if not path.startswith("/"):
+        path = "/" + path
+    return path
+
 def load_vfs(path, output_widget):
     global VFS, VFS_SOURCE_PATH
     VFS.clear()
@@ -91,10 +99,74 @@ def process_command(command, args, output_widget):
         output_widget.insert(tk.END, "VFS сброшена в состояние по умолчанию.\n")
 
     elif command == "ls":
-        output_widget.insert(tk.END, f"ls: команда вызвана с аргументами: {expanded_args}\n")
+        path = normalize_path(expanded_args[0] if expanded_args else current_dir)
+        found = False
+        for vfs_path in sorted(VFS.keys()):
+            if vfs_path == path:
+                continue
+            if vfs_path.startswith(path.rstrip("/") + "/"):
+                relative = vfs_path[len(path.rstrip("/")) + 1:]
+                if "/" not in relative:
+                    item = VFS[vfs_path]
+                    suffix = "/" if item['type'] == 'dir' else ""
+                    output_widget.insert(tk.END, f"{relative}{suffix}\n")
+                    found = True
+        if not found:
+            output_widget.insert(tk.END, "Содержимое пусто или путь не найден\n")
 
     elif command == "cd":
-        output_widget.insert(tk.END, f"cd: команда вызвана с аргументами: {expanded_args}\n")
+        if not expanded_args:
+            output_widget.insert(tk.END, "Ошибка: не указан путь\n")
+        else:
+            target = normalize_path(expanded_args[0])
+            if target in VFS and VFS[target]['type'] == 'dir':
+                current_dir = target
+                output_widget.insert(tk.END, f"Текущая директория: {current_dir}\n")
+            else:
+                output_widget.insert(tk.END, f"Ошибка: директория не найдена: {target}\n")
+
+    elif command == "tac":
+        if not expanded_args:
+            output_widget.insert(tk.END, "Ошибка: не указан файл\n")
+        else:
+            target = normalize_path(expanded_args[0])
+            if target in VFS and VFS[target]['type'] == 'file':
+                content = VFS[target]['content']
+                lines = content.split("\n")
+                for line in reversed(lines):
+                    output_widget.insert(tk.END, f"{line}\n")
+            else:
+                output_widget.insert(tk.END, f"Ошибка: файл не найден: {target}\n")
+
+    elif command == "find":
+        if not expanded_args:
+            output_widget.insert(tk.END, "Ошибка: не указан шаблон\n")
+        else:
+            pattern = expanded_args[0]
+            found = False
+            for vfs_path, item in VFS.items():
+                if pattern in vfs_path:
+                    suffix = "/" if item['type'] == 'dir' else ""
+                    output_widget.insert(tk.END, f"{vfs_path}{suffix}\n")
+                    found = True
+            if not found:
+                output_widget.insert(tk.END, f"Ничего не найдено по шаблону: {pattern}\n")
+
+    elif command == "rmdir":
+        if not expanded_args:
+            output_widget.insert(tk.END, "Ошибка: не указан путь\n")
+        else:
+            target = normalize_path(expanded_args[0])
+            if target not in VFS or VFS[target]['type'] != 'dir':
+                output_widget.insert(tk.END, f"Ошибка: директория не найдена: {target}\n")
+            else:
+                for vfs_path in VFS:
+                    if vfs_path.startswith(target.rstrip("/") + "/"):
+                        output_widget.insert(tk.END, f"Ошибка: директория не пуста: {target}\n")
+                        break
+                else:
+                    del VFS[target]
+                    output_widget.insert(tk.END, f"Директория удалена: {target}\n")
 
     else:
         output_widget.insert(tk.END, f"Ошибка: команда '{command}' не найдена\n")
@@ -120,7 +192,6 @@ def run_script(script_path, output_widget):
         output_widget.insert(tk.END, f"Ошибка выполнения скрипта: {e}\n")
 
 def on_enter(event, entry_widget, output_widget):
-    global current_dir
     user_input = entry_widget.get()
     if not user_input.strip():
         return
@@ -138,7 +209,6 @@ def on_enter(event, entry_widget, output_widget):
         entry_widget.master.destroy()
 
 def main():
-    global VFS_SOURCE_PATH
     parser = argparse.ArgumentParser()
     parser.add_argument('--vfs', type=str, default=None)
     parser.add_argument('--script', type=str, default=None)
@@ -158,7 +228,7 @@ def main():
     output_widget.pack(padx=10, pady=10, fill=tk.BOTH, expand=True)
     
     output_widget.insert(tk.END, "Добро пожаловать в эмулятор оболочки!\n")
-    output_widget.insert(tk.END, "Доступные команды: ls, cd, exit, conf-dump, vfs-init\n")
+    output_widget.insert(tk.END, "Доступные команды: ls, cd, tac, find, rmdir, exit, conf-dump, vfs-init\n")
     output_widget.insert(tk.END, "Поддерживается раскрытие переменных окружения (например, $HOME)\n\n")
     
     entry_widget = tk.Entry(root)
@@ -177,3 +247,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+    /empty,dir,
