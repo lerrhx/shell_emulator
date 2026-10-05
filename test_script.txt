@@ -1,0 +1,10 @@
+# Тестовый скрипт для всех команд
+ls
+cd /home
+ls
+cd /home/user
+ls
+tac /home/user/file.txt
+find file
+rmdir /empty
+conf-dump
