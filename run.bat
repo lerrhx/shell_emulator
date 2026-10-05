@@ -1,0 +1,1 @@
+python src/my_shell.py --vfs tests/test_vfs.csv --script tests/test_script.txt
